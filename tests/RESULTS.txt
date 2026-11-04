@@ -1,0 +1,21 @@
+listeners: 10
+storage.airplane_mode: 1
+storage.install_app: 1
+storage.call_forwarding: 1
+storage.screen_share: 2
+storage.screenshot: 1
+storage.fraud_phone: 2
+storage.fraud_url: 1
+storage.voip_record: 2
+provider.ingress: 3
+api.current: 1
+api.past: 1
+api.duration: 1
+api.score: 1
+PASS real APK forced-adaptive profile equals all 28 known targets
+PASS renamed class/method/callback metadata fixture
+PASS duplicate screenshot candidate skipped, unrelated group retained
+PASS missing registration skips entire paired listener group
+PASS unknown callback skips all affected APIs
+PASS changed rejection-code evidence skips only affected API
+ALL PASS elapsedMs=1574
