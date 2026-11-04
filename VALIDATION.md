@@ -1,23 +1,27 @@
-# 0.2.0 验证范围
+# 0.2.1 验证范围
 
-本次从整包版本锁定改为“精确 APK 快速路径 + 未知 APK 按功能特征识别”。
-所有既有逻辑的更新应以 README 和本文件为准。
+本次将模块 applicationId、namespace 和 Java 包名改为
+`io.github.yunyizea.xsofprivacy`，并同步修改 Xposed 入口、测试入口和源码路径。
+versionCode=4，versionName=0.2.1-preview。识别与拦截逻辑未变。
 
-主机端测试结果见 tests/RESULTS.txt；覆盖当前 APK、重命名元数据夹具、
-歧义候选、监听配对缺失、回调关系缺失和拒绝码证据变化。
+已完成：
 
-已分析 APK：手机管家 12.8.7-260927.0.1，SHA-256：
-`f4eda1b7b0f46521c93ddc75f7d833aec7bd48674c561e545f2b84a1edd6284c`。
+- Java 17 编译及 D8 8.7.18 DEX 生成。
+- 当前目标 APK 的全部 28 个方法识别、元数据重命名、歧义候选、
+  监听配对缺失、回调缺失和拒绝码证据变化测试，见 tests/RESULTS.txt。
+- apksig 8.7.3 签名验证通过。
+- APK 包名、版本、Xposed 入口与 DEX 中入口类一致。
+- 未打入旧模块包名的类、测试类或 Xposed 框架实现。
+- resources.arsc 为 ZIP_STORED，签名后偏移 788，满足 4 字节对齐。
+- 安装包无额外 Android 权限声明，ZIP 完整性检查通过。
 
-未验证：Android 真机安装、LSPosed 注入、ART 内联条件、启动开销、日常稳定性、
-第三方客户端行为、其他固件版本，以及采集和联网路径的完整覆盖。
-编译和识别测试通过不等于全面隐私保护成功。
+原 0.2.0 已有使用者在小米 14 国行系统
+3.0.307.0.WNCCNXM.C11、手机管家 12.8.7-260927.0.1 上实机验证有效的反馈。
+本次 0.2.1 新包尚未实机安装复验，也未验证外部模块仓库的提交审核结果。
+Gradle 构建未完整执行；安装包使用 AAPT2 + D8 + apksig 直接工具链构建。
 
-构建结果：Java 17 编译、D8 8.7.18 DEX 生成、apksig 8.7.3 v3 签名验证通过。
-资源文件为 ZIP_STORED，签名后数据偏移 772，满足 4 字节对齐。
-输出 APK versionCode=3 / versionName=0.2.0-preview，无权限声明；包含解析依赖、
-Xposed 入口和依赖许可证，未打包 Xposed 框架实现、测试类、原 APK 或数据库。
-Gradle 构建未完整执行；安装包使用直接 AAPT2 + D8 + apksig 工具链生成。
+包名变化后不能覆盖安装旧包。应禁用并卸载旧模块，安装新包后重新设置
+手机管家作用域并重启。功能边界与适配限制见 README.md。
 
 输出 APK SHA-256：
-`63021c5f91a72b7f999633f1d9deccd4c57d645999bc913920fbfcd707aa4259`
+`995c05e56091f74e037bc0043c93b7da8c43d7d369895219b85702ec65628ea4`

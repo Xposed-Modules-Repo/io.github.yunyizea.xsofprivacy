@@ -1,8 +1,8 @@
-package local.xsofprivacy;
+package io.github.yunyizea.xsofprivacy;
 
 import java.util.*;
-import local.xsofprivacy.DexIndex.*;
-import local.xsofprivacy.CompatibilityResolver.*;
+import io.github.yunyizea.xsofprivacy.DexIndex.*;
+import io.github.yunyizea.xsofprivacy.CompatibilityResolver.*;
 
 /** Host tests of identification policy; not Android/LSPosed runtime tests. */
 public final class ResolverTest {

@@ -18,4 +18,4 @@ PASS duplicate screenshot candidate skipped, unrelated group retained
 PASS missing registration skips entire paired listener group
 PASS unknown callback skips all affected APIs
 PASS changed rejection-code evidence skips only affected API
-ALL PASS elapsedMs=1574
+ALL PASS elapsedMs=1501

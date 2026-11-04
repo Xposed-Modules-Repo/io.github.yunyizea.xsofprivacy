@@ -40,13 +40,13 @@ def main():
         classpath = os.pathsep.join(jars)
         classes = work / "classes"
         classes.mkdir()
-        source = root / "app/src/main/java/local/xsofprivacy"
+        source = root / "app/src/main/java/io/github/yunyizea/xsofprivacy"
         files = [source / "DexIndex.java", source / "CompatibilityResolver.java",
                  root / "tests/ResolverTest.java"]
         subprocess.run(["java", "com.sun.tools.javac.Main", "-source", "17", "-target", "17",
                         "-classpath", classpath, "-d", str(classes), *map(str, files)], check=True)
         subprocess.run(["java", "-Xmx512m", "-cp", str(classes) + os.pathsep + classpath,
-                        "local.xsofprivacy.ResolverTest", str(apk)], check=True)
+                        "io.github.yunyizea.xsofprivacy.ResolverTest", str(apk)], check=True)
 
 
 if __name__ == "__main__":
