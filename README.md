@@ -2,7 +2,7 @@
 
 用于小米 HyperOS 手机管家的 LSPosed 隐私控制模块，通过运行时 Hook，拦截已识别的 XSOF 涉诈检测行为监听、本地记录写入及对外查询接口。
 
-当前版本：**0.2.0-preview**。已收到小米 14 实机验证有效的反馈；其他版本采用按功能识别的适配机制。
+当前版本：**0.2.1-preview**，模块包名为 `io.github.yunyizea.xsofprivacy`。此前的 0.2.0 版本已收到小米 14 实机验证有效的反馈；0.2.1 调整模块包名和入口路径，拦截逻辑保持一致，新安装包仍需实机复验。
 
 ## 功能
 
@@ -39,7 +39,7 @@
 
 ## 安装
 
-1. 下载发布的模块 APK；使用源码压缩包时，安装 `preview-apk/xsof-privacy-0.2.0-preview.apk`。
+1. 下载发布的模块 APK；使用源码压缩包时，安装 `preview-apk/xsof-privacy-0.2.1-preview.apk`。
 2. 在 LSPosed 管理器中启用 **XSOF Privacy Preview**。
 3. 作用域只选择 **手机管家 / `com.miui.securitycenter`**，无需选择系统框架。
 4. 重启手机，使原有进程退出并重新加载模块。
@@ -50,6 +50,8 @@
 ### 更新与停用
 
 更新模块后重启手机。停用时，在 LSPosed 中禁用模块并重启即可恢复原程序行为。
+
+0.2.1 将模块包名从 `local.xsofprivacy` 改为 `io.github.yunyizea.xsofprivacy`，Android 会把它视为新的应用。请先在 LSPosed 中禁用并卸载旧模块，再安装新版、重新启用并选择手机管家作用域，最后重启。不要同时启用新旧两个模块。
 
 若更新提示签名不一致，可卸载旧的 **XSOF Privacy 模块**后重新安装，再启用并设置作用域；不需要卸载手机管家。
 
@@ -201,7 +203,7 @@ python tools/run_resolver_tests.py /path/to/securitycenter-12.8.7.apk
 | `tools/run_resolver_tests.py` | 准备依赖并执行识别测试 |
 | `tools/repack_apk.py` | 直接工具链的签名前组装与资源对齐检查 |
 
-Java 源码位于 `app/src/main/java/local/xsofprivacy/`。
+Java 源码位于 `app/src/main/java/io/github/yunyizea/xsofprivacy/`。
 
 ## 适配边界
 
