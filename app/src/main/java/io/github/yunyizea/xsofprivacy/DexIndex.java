@@ -106,7 +106,12 @@ public final class DexIndex {
                                 ||c.text("xsof_fraud_detection_current")
                                 ||c.text("xsof_fraud_detection_past")
                                 ||c.text("xsof_fraud_detection_duration")
-                                ||c.text("xsof_fraud_detection_score"))out.add(c);
+                                ||c.text("xsof_fraud_detection_score")
+                                ||c.text("PHONE_SCAM_SCENE")||c.text("VIDEO_SCAM_SCENE")
+                                ||c.text("operator_service_improve_plan")
+                                ||c.text("application/encrypted-json")
+                                ||c.text("QueryAppInfoThread")
+                                ||c.type.startsWith("Lcom/mobiletools/systemhelper/control/"))out.add(c);
                     }
                 }
             }

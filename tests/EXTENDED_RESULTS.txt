@@ -1,0 +1,18 @@
+guard.ai_detection: 1
+helper.policy_gate: 1
+helper.encrypted_post: 1
+helper.app_usage: 1
+helper.receiver.AppInfoRegisterReceiver: 1
+helper.receiver.ScheduleRegisterReceiver: 1
+helper.receiver.GetSignalInfoReceiver: 1
+helper.receiver.SignalInfoRegisterReceiver: 1
+helper.receiver.OnBootReceiver: 1
+helper.receiver.SIMStateReceiver: 1
+helper.receiver.ConnectStateReceiver: 1
+PASS reviewed-APK profiles equal adaptive profiles
+PASS target classes, descriptors and result policies against both uploaded APKs
+PASS wrong package/APK rejected
+PASS missing setting anchor skips only the gate group
+PASS ambiguous transport candidate skipped
+PASS missing foreground-service anchor skipped
+ALL EXTENDED TESTS PASS; no Android device execution performed

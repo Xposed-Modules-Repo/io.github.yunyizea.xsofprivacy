@@ -11,8 +11,11 @@ public final class CompatibilityResolver {
     static final String VALUES="Landroid/content/ContentValues;";
     public static final class Target {
         public final Id method, callback;
+        public final int mode;
+        public static final int VOID=0, FALSE=1, STOP_SERVICE=2;
         public Target(Id method) { this(method,null); }
-        public Target(Id method,Id callback) { this.method=method;this.callback=callback; }
+        public Target(Id method,Id callback) { this(method,callback,VOID); }
+        public Target(Id method,Id callback,int mode) { this.method=method;this.callback=callback;this.mode=mode; }
     }
     public static final class Group {
         public final String name;

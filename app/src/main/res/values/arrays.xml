@@ -1,5 +1,7 @@
 <resources>
     <string-array name="scope">
         <item>com.miui.securitycenter</item>
+        <item>com.miui.guardprovider</item>
+        <item>com.mobiletools.systemhelper</item>
     </string-array>
 </resources>

@@ -1,6 +1,7 @@
 package io.github.yunyizea.xsofprivacy;
 
 import android.app.Application;
+import android.app.Service;
 import android.content.Context;
 import android.content.pm.PackageInfo;
 import android.os.Binder;
@@ -23,11 +24,11 @@ public final class PrivacyHook implements IXposedHookLoadPackage {
     private static final AtomicBoolean ATTEMPTED=new AtomicBoolean();
 
     @Override public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lp) {
-        if(!TARGET.equals(lp.packageName))return;
+        if(!supported(lp.packageName))return;
         XposedHelpers.findAndHookMethod(Application.class,"attach",Context.class,new XC_MethodHook() {
             @Override protected void afterHookedMethod(MethodHookParam p) {
                 Context context=(Context)p.args[0];
-                if(TARGET.equals(context.getPackageName())&&ATTEMPTED.compareAndSet(false,true))
+                if(lp.packageName.equals(context.getPackageName())&&ATTEMPTED.compareAndSet(false,true))
                     install(context,lp.classLoader,lp.processName);
             }
         });
@@ -36,19 +37,21 @@ public final class PrivacyHook implements IXposedHookLoadPackage {
     private static void install(Context context,ClassLoader loader,String process) {
         long started=System.nanoTime();
         try {
-            PackageInfo info=context.getPackageManager().getPackageInfo(TARGET,0);
+            String pkg=context.getPackageName();
+            PackageInfo info=context.getPackageManager().getPackageInfo(pkg,0);
             List<String> apks=new ArrayList<>();
             apks.add(context.getApplicationInfo().sourceDir);
             String[] splits=(String[])context.getApplicationInfo().getClass()
                     .getField("splitSourceDirs").get(context.getApplicationInfo());
             if(splits!=null)Collections.addAll(apks,splits);
-            boolean exact=apks.size()==1&&KNOWN_SHA256.equals(hash(apks.get(0)));
+            String reviewed=TARGET.equals(pkg)?KNOWN_SHA256:ExtendedResolver.reviewedSha(pkg);
+            boolean exact=apks.size()==1&&reviewed!=null&&reviewed.equals(hash(apks.get(0)));
             List<Group> groups;
-            if(exact)groups=CompatibilityResolver.known();
+            if(exact)groups=TARGET.equals(pkg)?CompatibilityResolver.known():ExtendedResolver.known(pkg);
             else {
                 // Synchronous before provider/service setup; no stale disk cache.
                 DexIndex index=DexIndex.scan(apks);
-                groups=CompatibilityResolver.discover(index);
+                groups=TARGET.equals(pkg)?CompatibilityResolver.discover(index):ExtendedResolver.discover(pkg,index);
                 log(process,"SCAN dex="+index.dexCount+" anchorClasses="+index.classes.size());
             }
             log(process,"PROFILE="+(exact?"EXACT_APK":"ADAPTIVE_UNVERIFIED")+" version="+info.versionName);
@@ -78,9 +81,14 @@ public final class PrivacyHook implements IXposedHookLoadPackage {
                 if(used.contains(target.method)||!local.add(target.method))
                     throw new IllegalArgumentException("overlapping target");
                 Method method=resolve(target.method,loader);
-                if(method.getReturnType()!=void.class||Modifier.isStatic(method.getModifiers())
+                Class<?> result=target.mode==Target.FALSE?boolean.class
+                        :target.mode==Target.STOP_SERVICE?int.class:void.class;
+                if(method.getReturnType()!=result
+                        ||(target.mode!=Target.FALSE&&Modifier.isStatic(method.getModifiers()))
                         ||Modifier.isAbstract(method.getModifiers())||Modifier.isNative(method.getModifiers()))
                     throw new IllegalArgumentException("unsupported target signature");
+                if(target.mode==Target.STOP_SERVICE&&!Service.class.isAssignableFrom(method.getDeclaringClass()))
+                    throw new IllegalArgumentException("not a service entry");
                 Method reply=null;
                 if(target.callback!=null) {
                     reply=resolve(target.callback,loader);
@@ -100,7 +108,12 @@ public final class PrivacyHook implements IXposedHookLoadPackage {
                 handles.add(XposedBridge.hookMethod(methods.get(i),new XC_MethodHook(10000) {
                     @Override protected void beforeHookedMethod(MethodHookParam p) {
                         if(first.compareAndSet(true,false))log(process,"HIT "+group.name+" "+target.method);
-                        p.setResult(null);
+                        if(target.mode==Target.FALSE)p.setResult(false);
+                        else if(target.mode==Target.STOP_SERVICE) {
+                            p.setResult(Service.START_NOT_STICKY);
+                            try { ((Service)p.thisObject).stopSelf((Integer)p.args[2]); }
+                            catch(Throwable failure) { log(process,"STOP_FAILED "+group.name+" "+failure.getClass().getSimpleName()); }
+                        } else p.setResult(null);
                         if(reply!=null) {
                             Object callback=p.args[p.args.length-1];
                             if(callback!=null)try {
@@ -151,6 +164,9 @@ public final class PrivacyHook implements IXposedHookLoadPackage {
         StringBuilder out=new StringBuilder(64);
         for(byte b:md.digest())out.append(String.format(Locale.ROOT,"%02x",b&255));
         return out.toString();
+    }
+    private static boolean supported(String pkg) {
+        return TARGET.equals(pkg)||ExtendedResolver.GUARD.equals(pkg)||ExtendedResolver.HELPER.equals(pkg);
     }
     private static void log(String process,String text) { XposedBridge.log("[XsofPrivacy]["+process+"] "+text); }
 }

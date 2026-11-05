@@ -1,8 +1,8 @@
 # XSOF Privacy
 
-用于小米 HyperOS 手机管家的 LSPosed 隐私控制模块，通过运行时 Hook，拦截已识别的 XSOF 涉诈检测行为监听、本地记录写入及对外查询接口。
+用于小米 HyperOS 的 LSPosed 隐私控制模块。按作用域选择手机管家 XSOF、GuardProvider 的 AI 通话检测，以及 SystemHelper 的部分运营商遥测路径。
 
-当前版本：**0.2.1-preview**，模块包名为 `io.github.yunyizea.xsofprivacy`。此前的 0.2.0 版本已收到小米 14 实机验证有效的反馈；0.2.1 调整模块包名和入口路径，拦截逻辑保持一致，新安装包仍需实机复验。
+当前版本：**0.3.0-preview**，模块包名为 `io.github.yunyizea.xsofprivacy`。原有 XSOF 功能已有实机生效反馈；新增的两个作用域只完成静态识别和构建检查，尚需真机验证。
 
 ## 功能
 
@@ -25,7 +25,7 @@
 | 手机管家 | `12.8.7-260927.0.1` |
 | 手机管家 versionCode | `40001287` |
 | 测试反馈 | 模块实机验证有效 |
-| LSPosed 分支与版本 | 暂未记录 |
+| LSPosed | 使用者提供版本 `2.2.1 (7912)`，分支名称未提供 |
 
 上述为已反馈的设备环境和生效结果，不代表所有功能、第三方应用兼容性和长期稳定性均已逐项验证。其他机型、系统区域和手机管家版本仍需自行检查日志与实际行为。
 
@@ -39,13 +39,22 @@
 
 ## 安装
 
-1. 下载发布的模块 APK；使用源码压缩包时，安装 `preview-apk/xsof-privacy-0.2.1-preview.apk`。
+1. 下载发布的模块 APK；使用源码压缩包时，安装 `preview-apk/xsof-privacy-0.3.0-preview.apk`。
 2. 在 LSPosed 管理器中启用 **XSOF Privacy Preview**。
-3. 作用域只选择 **手机管家 / `com.miui.securitycenter`**，无需选择系统框架。
+3. 按下表选择需要的作用域，无需选择系统框架。只选手机管家时不会启用新增两项功能。
 4. 重启手机，使原有进程退出并重新加载模块。
 5. 查看 LSPosed 日志，搜索 `XsofPrivacy`，确认相关进程和功能组的状态。
 
 模块没有独立设置界面，不需要额外授予模块应用权限。
+
+| 可选作用域 | 包名 | 启用影响 |
+|---|---|---|
+| 手机管家 | `com.miui.securitycenter` | 原有 XSOF 监听、写入和查询拦截 |
+| 系统安全组件 / GuardProvider | `com.miui.guardprovider` | 停用已识别的 AI 通话音视频检测服务及该服务统计 |
+| SystemHelper | `com.mobiletools.systemhelper` | 阻止已识别的遥测采集入口与加密提交，可能影响终端注册/运营商体验计划统计 |
+
+建议分别启用新增作用域、重启并检查日志。该模块没有全局禁用网络、定位 SDK、媒体 API 或整个杀毒服务。
+
 
 ### 更新与停用
 
@@ -57,7 +66,7 @@
 
 ## 工作原理
 
-模块在手机管家的 `Application.attach()` 完成后进行初始化，并在目标进程中安装 Hook。它采用两条识别路径。
+模块在所选目标应用的 `Application.attach()` 完成后进行初始化，并在目标进程中安装 Hook。它采用两条识别路径。
 
 ### 已分析 APK：精确适配
 
@@ -86,7 +95,7 @@ f4eda1b7b0f46521c93ddc75f7d833aec7bd48674c561e545f2b84a1edd6284c
 
 ### 功能分组
 
-当前策略共包含 **14 个功能组、28 个 Hook 目标**：
+手机管家策略包含 **14 个功能组、28 个 Hook 目标**：
 
 | 功能组 | 目标数 | 拦截范围 |
 |---|---:|---|
@@ -219,3 +228,32 @@ Java 源码位于 `app/src/main/java/io/github/yunyizea/xsofprivacy/`。
 提交 Issue 时，请提供机型、完整系统版本、手机管家版本、模块版本、LSPosed 分支与版本，以及相关的 `XsofPrivacy` 日志。
 
 如涉及某次操作，请说明复现步骤、预期结果、实际结果和是否能在停用模块后恢复。日志、截图或数据库片段中的个人信息请先脱敏；通常无需上传完整行为数据库。
+
+## 0.3.0 扩展范围
+
+新增 GuardProvider `guard.ai_detection` 1 组、1 个目标；SystemHelper 的许可判断、
+加密 POST、应用统计线程和 7 类专用广播入口共 10 组、10 个目标。三个作用域
+合计 25 组、39 个目标，日志在各进程分别汇总。
+
+新增作用域同样支持已分析 APK 的哈希快速路径和未知 APK 的特征匹配路径。
+专用 Receiver 还匹配组件类名，组件改名后会跳过，不保证所有未来版本兼容。
+`helper.policy_gate` 只改变本进程中的返回结果，不修改手机保存的许可设置。
+`helper.encrypted_post` 返回 false，不伪造成功；调用方可能重试，需检查实际开销。
+`guard.ai_detection` 跳过启动命令、返回 START_NOT_STICKY 并请求 stopSelf(startId)。
+若出现 `STOP_FAILED`，停止请求未成功，需检查实际服务状态。
+
+这会关闭相关 AI 音视频反诈和运营商遥测功能，不是仅隐藏提示。GuardProvider
+其他应用扫描/上报、未知 native 或动态加载路径仍可能运行，不代表全面阻断采集。
+
+新增样本：GuardProvider `3.1.4-20260902.0`（330），SystemHelper
+`3.0.1-20260313`（34）。分析证据、开关条件及限制见
+[扩展分析记录](docs/extended-analysis.md)。
+
+新增源码 `ExtendedResolver.java`，测试见 `tests/ExtendedResolverTest.java` 和
+`tests/EXTENDED_RESULTS.txt`。可用下列命令同时运行两套主机识别测试：
+
+```bash
+python tools/run_resolver_tests.py securitycenter-12.8.7.apk guardprovider-3.1.4.apk systemhelper-3.0.1.apk
+```
+
+0.3.0 新增功能尚未实机验证。原有实机反馈不能直接用于新增功能的效果结论。

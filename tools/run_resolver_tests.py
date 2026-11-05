@@ -21,8 +21,8 @@ DEPENDENCIES = [
 
 
 def main():
-    if len(sys.argv) != 2:
-        raise SystemExit("Usage: python tools/run_resolver_tests.py phone-manager.apk")
+    if len(sys.argv) not in (2,4):
+        raise SystemExit("Usage: python tools/run_resolver_tests.py phone-manager.apk [guardprovider.apk systemhelper.apk]")
     apk = Path(sys.argv[1]).resolve(strict=True)
     root = Path(__file__).resolve().parents[1]
     with tempfile.TemporaryDirectory(prefix="xsof-host-tests-") as work:
@@ -42,11 +42,17 @@ def main():
         classes.mkdir()
         source = root / "app/src/main/java/io/github/yunyizea/xsofprivacy"
         files = [source / "DexIndex.java", source / "CompatibilityResolver.java",
-                 root / "tests/ResolverTest.java"]
+                 source / "ExtendedResolver.java", root / "tests/ResolverTest.java",
+                 root / "tests/ExtendedResolverTest.java"]
         subprocess.run(["java", "com.sun.tools.javac.Main", "-source", "17", "-target", "17",
                         "-classpath", classpath, "-d", str(classes), *map(str, files)], check=True)
         subprocess.run(["java", "-Xmx512m", "-cp", str(classes) + os.pathsep + classpath,
                         "io.github.yunyizea.xsofprivacy.ResolverTest", str(apk)], check=True)
+        if len(sys.argv)==4:
+            subprocess.run(["java", "-Xmx512m", "-cp", str(classes) + os.pathsep + classpath,
+                            "io.github.yunyizea.xsofprivacy.ExtendedResolverTest",
+                            str(Path(sys.argv[2]).resolve(strict=True)),
+                            str(Path(sys.argv[3]).resolve(strict=True))], check=True)
 
 
 if __name__ == "__main__":
