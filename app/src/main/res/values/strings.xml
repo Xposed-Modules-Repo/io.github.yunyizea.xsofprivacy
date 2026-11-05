@@ -1,0 +1,7 @@
+<resources>
+    <string name="settings_title">XSOF Privacy · 日志设置</string>
+    <string name="detailed_logging_title">详细拦截日志</string>
+    <string name="detailed_logging_description">开启后，每次 Hook 拦截都会写入 LSPosed 日志，包括时间、应用与进程、版本、适配方式、功能组、方法签名、命中次数、返回结果和回调状态。不会记录电话号码、应用列表、Intent 内容或其他调用参数。</string>
+    <string name="logging_help">默认关闭。修改后无需重启；各目标进程会在下一次拦截时刷新设置，缓存最长 1 秒。\n\n在 LSPosed 日志中搜索 XsofPrivacy 或 BLOCKED 查看详细记录，本页面仅管理开关。开启前发生的拦截不会补记，首次命中与安装、错误日志仍会保留。\n\n详细日志可能较多，排查完成后建议关闭。关闭日志不会停用拦截。</string>
+    <dimen name="settings_padding">24dp</dimen>
+</resources>

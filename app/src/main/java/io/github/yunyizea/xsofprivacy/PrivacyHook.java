@@ -13,6 +13,7 @@ import java.lang.reflect.*;
 import java.security.MessageDigest;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import io.github.yunyizea.xsofprivacy.CompatibilityResolver.*;
 import io.github.yunyizea.xsofprivacy.DexIndex.Id;
 
@@ -55,13 +56,17 @@ public final class PrivacyHook implements IXposedHookLoadPackage {
                 log(process,"SCAN dex="+index.dexCount+" anchorClasses="+index.classes.size());
             }
             log(process,"PROFILE="+(exact?"EXACT_APK":"ADAPTIVE_UNVERIFIED")+" version="+info.versionName);
+            InterceptionLog detail = new InterceptionLog("[XsofPrivacy]["+process+"] package="+pkg
+                    +" version="+info.versionName+" profile="+(exact?"EXACT_APK":"ADAPTIVE_UNVERIFIED")
+                    +" pid="+android.os.Process.myPid(), () -> LoggingSettings.readRemote(context),
+                    android.os.SystemClock::elapsedRealtime, System::currentTimeMillis, XposedBridge::log);
             int installed=0,skipped=0,hooks=0;
             Set<Id> used=new HashSet<>();
             for(Group group:groups) {
                 if(group.skip!=null) {
                     skipped++;log(process,"SKIPPED "+group.name+" "+group.skip);continue;
                 }
-                int count=installGroup(group,loader,process,used);
+                int count=installGroup(group,loader,process,used,detail);
                 if(count>0){installed++;hooks+=count;}else skipped++;
             }
             log(process,"SUMMARY installedGroups="+installed+" skippedOrFailedGroups="+skipped
@@ -72,7 +77,8 @@ public final class PrivacyHook implements IXposedHookLoadPackage {
         }
     }
 
-    private static int installGroup(Group group,ClassLoader loader,String process,Set<Id> used) {
+    private static int installGroup(Group group,ClassLoader loader,String process,Set<Id> used,
+                                    InterceptionLog detail) {
         List<XC_MethodHook.Unhook> handles=new ArrayList<>();
         try {
             List<Method> methods=new ArrayList<>(),replies=new ArrayList<>();
@@ -104,26 +110,41 @@ public final class PrivacyHook implements IXposedHookLoadPackage {
             for(int i=0;i<methods.size();i++) {
                 final Target target=group.targets.get(i);
                 final Method reply=replies.get(i);
-                AtomicBoolean first=new AtomicBoolean(true),replyFailed=new AtomicBoolean();
+                AtomicLong hits=new AtomicLong();
+                AtomicBoolean replyFailed=new AtomicBoolean();
                 handles.add(XposedBridge.hookMethod(methods.get(i),new XC_MethodHook(10000) {
                     @Override protected void beforeHookedMethod(MethodHookParam p) {
-                        if(first.compareAndSet(true,false))log(process,"HIT "+group.name+" "+target.method);
+                        long hit=hits.incrementAndGet();
+                        if(hit==1)log(process,"HIT "+group.name+" "+target.method);
+                        String serviceStop="not_applicable",callbackStatus="not_applicable";
                         if(target.mode==Target.FALSE)p.setResult(false);
                         else if(target.mode==Target.STOP_SERVICE) {
                             p.setResult(Service.START_NOT_STICKY);
-                            try { ((Service)p.thisObject).stopSelf((Integer)p.args[2]); }
-                            catch(Throwable failure) { log(process,"STOP_FAILED "+group.name+" "+failure.getClass().getSimpleName()); }
+                            try {
+                                ((Service)p.thisObject).stopSelf((Integer)p.args[2]);
+                                serviceStop="requested";
+                            } catch(Throwable failure) {
+                                serviceStop="failed:"+failure.getClass().getSimpleName();
+                                log(process,"STOP_FAILED "+group.name+" "+failure.getClass().getSimpleName());
+                            }
                         } else p.setResult(null);
                         if(reply!=null) {
                             Object callback=p.args[p.args.length-1];
+                            callbackStatus="missing";
                             if(callback!=null)try {
                                 // Recognized profiles use the ACCESS_XSOF rejection code.
                                 reply.invoke(callback,new Object[]{null,1017});
+                                callbackStatus="rejected:1017";
                             } catch(Throwable failure) {
+                                callbackStatus="failed:"+failure.getClass().getSimpleName();
                                 if(replyFailed.compareAndSet(false,true))
                                     log(process,"CALLBACK_FAILED "+group.name+" "+failure.getClass().getSimpleName());
                             }
                         }
+                        detail.record(group.name,target.method.toString(),
+                                target.mode==Target.FALSE?"false":target.mode==Target.STOP_SERVICE
+                                        ?"START_NOT_STICKY":"void",hit,
+                                android.os.Process.myTid(),Binder.getCallingUid(),callbackStatus,serviceStop);
                     }
                 }));
             }

@@ -2,7 +2,7 @@
 
 用于小米 HyperOS 的 LSPosed 隐私控制模块。按作用域选择手机管家 XSOF、GuardProvider 的 AI 通话检测，以及 SystemHelper 的部分运营商遥测路径。
 
-当前版本：**0.3.0-preview**，模块包名为 `io.github.yunyizea.xsofprivacy`。原有 XSOF 功能已有实机生效反馈；新增的两个作用域只完成静态识别和构建检查，尚需真机验证。
+当前版本：**0.3.1-preview**，模块包名为 `io.github.yunyizea.xsofprivacy`。原有 XSOF 功能已有实机生效反馈；新增的两个作用域只完成静态识别和构建检查，尚需真机验证。
 
 ## 功能
 
@@ -39,13 +39,13 @@
 
 ## 安装
 
-1. 下载发布的模块 APK；使用源码压缩包时，安装 `preview-apk/xsof-privacy-0.3.0-preview.apk`。
+1. 下载发布的模块 APK；从源码构建时，安装 `app/build/outputs/apk/debug/app-debug.apk`。
 2. 在 LSPosed 管理器中启用 **XSOF Privacy Preview**。
 3. 按下表选择需要的作用域，无需选择系统框架。只选手机管家时不会启用新增两项功能。
 4. 重启手机，使原有进程退出并重新加载模块。
 5. 查看 LSPosed 日志，搜索 `XsofPrivacy`，确认相关进程和功能组的状态。
 
-模块没有独立设置界面，不需要额外授予模块应用权限。
+模块提供独立的日志设置 Activity，可从桌面或 LSPosed 的模块设置入口打开，不需要额外授予模块应用权限。
 
 | 可选作用域 | 包名 | 启用影响 |
 |---|---|---|
@@ -142,11 +142,29 @@ voip_record
 | `FAILED_ROLLBACK_INCOMPLETE` | 未能确认该组 Hook 全部撤销，应禁用模块并重启 |
 | `CALLBACK_FAILED` | 拒绝回调发送失败，客户端可能超时 |
 | `DISCOVERY_FAILED` | 扫描或准备失败，不能据此认为拦截生效 |
+| `BLOCKED` | 开启详细日志后，每次已安装 Hook 跳过原方法的记录 |
+| `DETAIL_SETTINGS_UNAVAILABLE` / `DETAIL_SETTINGS_RECOVERED` | 跨进程日志设置读取失败或恢复，失败期间暂停详细输出 |
 | `SUMMARY` | 汇总安装、跳过或失败的组数、Hook 数和初始化耗时 |
 
 **安装成功、Hook 注册成功和实际拦截生效是不同阶段。** 检查 `INSTALLED` 后，还应结合 `HIT` 和实际记录变化判断效果。
 
-每个方法在每个进程只记录首次命中，不持续输出事件内容。模块日志不输出电话号码、行为数据库内容或调用参数。
+基础 `HIT` 日志仍只记录每个方法在每个进程中的首次命中。模块日志不输出电话号码、行为数据库内容或调用参数。
+
+### 详细拦截日志开关（0.3.1）
+
+打开 **XSOF Privacy · 日志设置**，启用“详细拦截日志”（默认关闭）。开启后，每次已安装 Hook 拦截都会向 LSPosed 输出一条 `BLOCKED`，涵盖三个作用域，而不只记录首次命中。
+
+详细记录包含 UTC 时间、目标包与进程、应用版本、适配方式、PID/TID、Binder 调用 UID、功能组、完整 DEX 方法签名、该方法在当前进程的累计命中次数、跳过原方法后的返回策略、拒绝回调及停止服务请求的结果。例如：
+
+```text
+[XsofPrivacy][com.miui.securitycenter:remote] package=com.miui.securitycenter version=12.8.7-260927.0.1 profile=EXACT_APK pid=1234 BLOCKED time=2026-11-05T08:00:00Z tid=1235 callingUid=1000 group=storage.screenshot method=LRa/k;->e1(LQa/k;)V hit=2 original=skipped result=void callback=not_applicable serviceStop=not_applicable
+```
+
+上例仅为格式示意。`callingUid` 表示执行 Hook 时的 Binder 调用身份；普通进程内调用通常为自身 UID，不能单凭它认定是某个外部应用发起。`serviceStop=requested` 只表示已请求停止，不证明服务已经停止。回调会区分 `rejected:1017`、`missing` 和 `failed:异常类型`。
+
+开关保存在模块的私有设置中。目标进程通过只读 Provider 读取布尔值，每个进程最多每秒读取一次；修改后无需重启，在下一次拦截时刷新，缓存最长 1 秒。设置读取失败时关闭详细输出并在后续轮询重试；拦截继续执行。未解锁、模块被强行停止或系统限制跨应用访问时，详细输出可能暂不可用。
+
+关闭开关只停止逐次 `BLOCKED` 输出，安装、首次命中、错误等基础日志仍保留；已输出的日志不会被删除，开启前的事件不会补记。日志保留及导出由 LSPosed 管理，设置页仅管理开关。详细日志可能较多，排查完成后建议关闭。
 
 ## 如何确认生效
 
@@ -185,6 +203,8 @@ Xposed API 由运行时框架提供，不打入模块 APK；DEX 解析所需依�
 
 除上述实机生效反馈外，项目包含主机端识别回归测试：
 
+日志开关、连续命中、失败恢复和并发读取的单元测试可运行 `gradle :app:testDebugUnitTest`。0.3.1 本地构建与验证限制见 [日志功能验证记录](docs/logging-validation.md)。
+
 ```bash
 python tools/run_resolver_tests.py /path/to/securitycenter-12.8.7.apk
 ```
@@ -206,6 +226,9 @@ python tools/run_resolver_tests.py /path/to/securitycenter-12.8.7.apk
 | 文件 | 职责 |
 |---|---|
 | `PrivacyHook.java` | 入口、识别路径选择、按组安装 Hook、回调和日志 |
+| `SettingsActivity.java` | 详细拦截日志的开关界面 |
+| `LoggingSettings.java` / `LoggingSettingsProvider.java` | 私有设置与只读跨进程开关读取 |
+| `InterceptionLog.java` | 逐次拦截日志及设置刷新 |
 | `DexIndex.java` | 读取 DEX 并建立所需的语义索引 |
 | `CompatibilityResolver.java` | 精确配置、候选匹配和功能分组 |
 | `tests/ResolverTest.java` | 识别规则的主机端测试 |
