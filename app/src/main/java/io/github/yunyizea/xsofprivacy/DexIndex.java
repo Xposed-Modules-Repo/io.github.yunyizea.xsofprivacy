@@ -111,6 +111,7 @@ public final class DexIndex {
                                 ||c.text("operator_service_improve_plan")
                                 ||c.text("application/encrypted-json")
                                 ||c.text("QueryAppInfoThread")
+                                ||telemetryPairCaller(c)
                                 ||c.type.startsWith("Lcom/mobiletools/systemhelper/control/"))out.add(c);
                     }
                 }
@@ -118,5 +119,21 @@ public final class DexIndex {
         }
         if(out.dexCount==0)throw new IOException("No standard classes*.dex found");
         return out;
+    }
+
+    // Keep caller evidence even if its class has no string anchor of its own.
+    static boolean telemetryPairCaller(Clazz c) {
+        for(Node node:c.nodes) {
+            Set<String> encryptedOwners=new HashSet<>(),fallbackOwners=new HashSet<>();
+            for(Id call:node.calls)if("Z".equals(call.result)) {
+                if(call.args.equals(Arrays.asList("Ljava/lang/String;","[B","[B")))
+                    encryptedOwners.add(call.owner);
+                if(call.args.equals(Arrays.asList("Ljava/lang/String;","[B")))
+                    fallbackOwners.add(call.owner);
+            }
+            encryptedOwners.retainAll(fallbackOwners);
+            if(!encryptedOwners.isEmpty())return true;
+        }
+        return false;
     }
 }

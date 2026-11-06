@@ -31,13 +31,22 @@ import java.util.*;
 
 public final class Checker {
     public static void main(String[] a) throws Exception {
+        if (!ExtendedResolver.GUARD.equals(a[1]) && !ExtendedResolver.HELPER.equals(a[1])) {
+            System.err.println("Unsupported package: " + a[1]);
+            System.exit(2);
+        }
         DexIndex index = DexIndex.scan(Collections.singletonList(a[0]));
         List<Group> groups = ExtendedResolver.discover(a[1], index);
+        if (groups.isEmpty()) {
+            System.err.println("No feature groups discovered");
+            System.exit(1);
+        }
         int ok = 0, skip = 0;
         for (Group g : groups) {
-            if (g.skip != null) {
+            if (g.skip != null || g.targets.isEmpty()) {
                 skip++;
-                System.out.println("SKIPPED " + g.name + "  [" + g.skip + "]");
+                System.out.println("SKIPPED " + g.name + "  [" +
+                        (g.skip == null ? "no targets" : g.skip) + "]");
                 continue;
             }
             ok++;
@@ -46,9 +55,9 @@ public final class Checker {
                 sb.append("\\n      ").append(t.method.toString())
                         .append(" mode=").append(modeName(t.mode));
             }
-            System.out.println("INSTALLED " + g.name + " hooks=" + g.targets.size() + sb);
+            System.out.println("MATCHED " + g.name + " targets=" + g.targets.size() + sb);
         }
-        System.out.println("SUMMARY installedGroups=" + ok + " skipped=" + skip);
+        System.out.println("SUMMARY matchedGroups=" + ok + " skipped=" + skip);
         if (skip > 0) System.exit(1);
     }
 
@@ -75,7 +84,7 @@ def find_java() -> pathlib.Path:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("apk")
-    parser.add_argument("package")
+    parser.add_argument("package", choices=("com.miui.guardprovider", "com.mobiletools.systemhelper"))
     parser.add_argument("--classes", default=None,
                         help="compiled module classes directory")
     parser.add_argument("--dexlib2", default=None)

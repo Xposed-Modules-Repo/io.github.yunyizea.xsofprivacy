@@ -63,23 +63,33 @@ public final class ExtendedResolver {
                 g.targets.add(new Target(gate.id,null,Target.FALSE));
             });
             group(groups,"helper.encrypted_post",g->{
-                // 4.0.0 renamed the success log ("HTTPS register success!") and
-                // added a plaintext fallback sender. Anchor on structure instead of
-                // one exact log string, then take every sender on that class so the
-                // HTTPS path and its HTTP fallback cannot diverge.
+                // Legacy implementations have one sender. Newer implementations
+                // need both the encrypted sender and its caller-linked fallback.
                 Clazz sender=clazz(index,c->c.text("HttpHelper")
                         &&c.text("sendHttpRequest() path = ")
                         &&c.text("application/encrypted-json"),"helper telemetry class");
-                for(Node n:sender.nodes) {
-                    if(!"Z".equals(n.id.result)||(n.flags&0x508)!=0)continue;
-                    if(!n.id.args.contains(STR)||!n.id.args.contains("[B"))continue;
-                    if(!n.calls("Ljava/net/URL;","openConnection"))continue;
-                    if(!n.calls("Ljava/net/URLConnection;","getOutputStream"))continue;
-                    if(!n.calls("Ljava/net/HttpURLConnection;","getResponseCode"))continue;
-                    g.targets.add(new Target(n.id,null,Target.FALSE));
+                List<Node> senders=new ArrayList<>();
+                for(Node n:sender.nodes)if(telemetrySender(n))senders.add(n);
+                Node encrypted=one(senders,n->n.id.args.equals(Arrays.asList(STR,"[B","[B"))
+                        &&n.text("application/encrypted-json"),"helper encrypted sender");
+                if(senders.size()==1) {
+                    // Never mistake a partially recognized newer implementation
+                    // for the reviewed legacy single-sender shape.
+                    if(!encrypted.text("register success!")||sender.text("HTTPS register success!"))
+                        throw new IllegalArgumentException("unverified single telemetry sender");
+                    g.targets.add(new Target(encrypted.id,null,Target.FALSE));
+                } else {
+                    if(senders.size()!=2)throw new IllegalArgumentException(
+                            "helper telemetry senders="+senders.size());
+                    Node fallback=one(senders,n->n.id.args.equals(Arrays.asList(STR,"[B")),
+                            "helper fallback sender");
+                    boolean linked=false;
+                    for(Node caller:index.methods.values())
+                        if(caller.calls.contains(encrypted.id)&&caller.calls.contains(fallback.id))linked=true;
+                    if(!linked)throw new IllegalArgumentException("unlinked telemetry fallback");
+                    g.targets.add(new Target(encrypted.id,null,Target.FALSE));
+                    g.targets.add(new Target(fallback.id,null,Target.FALSE));
                 }
-                if(g.targets.size()<2)throw new IllegalArgumentException(
-                        "helper telemetry senders="+g.targets.size());
             });
             group(groups,"helper.app_usage",g->{
                 Clazz worker=clazz(index,c->"Ljava/lang/Thread;".equals(c.parent)
@@ -103,5 +113,13 @@ public final class ExtendedResolver {
             }
         }
         return groups;
+    }
+
+    private static boolean telemetrySender(Node n) {
+        return "Z".equals(n.id.result)&&(n.flags&0x508)==0
+                &&n.id.args.contains(STR)&&n.id.args.contains("[B")
+                &&n.calls("Ljava/net/URL;","openConnection")
+                &&n.calls("Ljava/net/URLConnection;","getOutputStream")
+                &&n.calls("Ljava/net/HttpURLConnection;","getResponseCode");
     }
 }

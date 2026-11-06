@@ -111,30 +111,50 @@ Settings.Secure.getInt(resolver, "operator_service_improve_plan", 0) == 1
 
 1. 成功日志由 `"register success!"` 改为 `"HTTPS register success!"`。原配置要求精确
    匹配前者，导致整组因单条字符串不符而跳过（`candidates=0`）。
-2. 新增了明文 HTTP 兜底发送方法 `Lg1/f;->f(Ljava/lang/String;[B)Z`。
+2. 新增了 HTTP 备用发送方法 `Lg1/f;->f(Ljava/lang/String;[B)Z`。
 
-第 2 点使「只拦截 HTTPS 发送」不再安全。`e1/g.a()` 的控制流是先调用
-`Lg1/f;->g(String,[B,[B)Z`，失败后查响应码，异常时进入兜底分支，最终调用
-`Lg1/f;->f(String,[B)Z`。若只拦截 `g` 并返回 false，`this.a` 为 null 会使响应码
-查询抛异常，控制流进入兜底分支，**反而触发明文上报**。
+2026-11-06 使用者提供小米 15 ROM 提取的 `systemhelper-4.0.0-dada-os3.apk` 后，已独立核对
+DEX。此前合并记录中的“连接为空导致响应码查询抛异常、拦截后反而明文上报”不符合这份 APK：
 
-因此识别规则改为按类结构锚定，并同时拦截该类上所有符合以下条件的发送方法：
-返回 `Z`、参数含 `String` 与 `[B`、且调用 `openConnection`、`getOutputStream`、
-`getResponseCode`。锚定类需同时含 `HttpHelper`、`sendHttpRequest() path = `、
-`application/encrypted-json` 三个稳定特征。至少匹配到 2 个目标，否则整组继续
-跳过，不做猜测。
+- `e1/g.a()` 在 DEX 偏移 `0x00c2` 调用 `g(String,byte[],byte[])`，正常返回 false 后
+  在 `0x00c8` 调用 `g1/f.c()`。该 getter 只返回缓存的整数 `c`，不访问连接对象；构造时为 0。
+- 备用分支位于异常处理内；在 `0x00ef` 调用 `g1/f.e()` 读取布尔字段 `d`，只有为 true
+  才继续到 `0x0126` 调用 `f(String,byte[])`。`g` 的 SSLException 分支置 `d=true`，
+  普通异常分支置 false。直接 Hook `g` 返回 false 本身不会执行这些原方法分支。
+- 两个调用传入同一个寄存器中的字节数组，来自 `g1/c.a(String,byte[])` 的
+  `AES/GCM/NoPadding` 加密结果。HTTP 缺少 TLS 与业务正文是否加密是不同问题；
+  不能将这条备用路径描述成必然发送明文业务正文。
 
-用 `tools/check_extended_resolver.py` 在 `4.0.0` 上复现：
+同时拦截两入口仍可覆盖已识别的发送实现，避免其他直接调用遗漏；但应依据实际控制流
+说明作用，不再以不存在的空连接异常作为理由。上述是静态分析，未触发设备网络请求。
+
+合并提交最初要求至少两个发送方法，但这会导致 3.0.1 的单发送实现自适应识别失败。
+0.3.2 保留类上的三个锚点 `HttpHelper`、`sendHttpRequest() path = `、
+`application/encrypted-json`，要求发送方法返回 `Z` 且直接调用 `openConnection`、
+`getOutputStream`、`getResponseCode`，并区分两种形态：
+
+- 单发送：参数为 `(String, byte[], byte[])`，含加密 MIME 与旧版成功日志，且没有新版成功日志证据。
+- 双发送：上述加密方法与 `(String, byte[])` 的备用方法唯一匹配，且同一调用方法直接引用二者。
+
+双发送不能只识别一个；目标过多、形态未知或调用关系缺失时跳过整组。DEX 索引额外保留
+这种双签名调用关系所在的类，不要求调用方也具有字符串锚点。
+
+真实 APK 的版本为 `4.0.0-20260610`，versionCode 34，SHA-256 为
+`0812ac78c41f29c835b78df5eab41ebda9491ffce290503c19c8b18a22c2482c`。
+当前 0.3.2 源码在该文件上的主机检查结果如下：
 
 ```text
-INSTALLED helper.encrypted_post hooks=2
-      Lg1/f;->f(Ljava/lang/String;[B)Z mode=FALSE
+MATCHED helper.encrypted_post targets=2
       Lg1/f;->g(Ljava/lang/String;[B[B)Z mode=FALSE
-SUMMARY installedGroups=10 skipped=0
+      Lg1/f;->f(Ljava/lang/String;[B)Z mode=FALSE
+SUMMARY matchedGroups=10 skipped=0
 ```
 
 调整前为 9 组 / 9 个目标 / 1 组跳过，调整后为 10 组 / 11 个目标 / 0 组跳过。
 手机管家 14 组与 GuardProvider 1 组的识别结果未受影响。
+真实 APK 的共同调用方保留、发送目标、返回策略、重命名、缺失与歧义测试已经加入
+`ExtendedResolverTest`。这份文件仍走自适应路径，设备日志中的 `ADAPTIVE_UNVERIFIED`
+不代表识别失败；本次没有增加该 APK 的哈希快速配置。
 
 ## 证据范围
 

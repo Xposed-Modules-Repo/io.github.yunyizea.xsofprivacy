@@ -2,7 +2,7 @@
 
 用于小米 HyperOS 的 LSPosed 隐私控制模块。按作用域选择手机管家 XSOF、GuardProvider 的 AI 通话检测，以及 SystemHelper 的部分运营商遥测路径。
 
-当前版本：**0.3.1-preview**，模块包名为 `io.github.yunyizea.xsofprivacy`。原有 XSOF 功能已有实机生效反馈；新增的两个作用域只完成静态识别和构建检查，尚需真机验证。
+当前版本：**0.3.2-preview**，模块包名为 `io.github.yunyizea.xsofprivacy`。原有 XSOF 功能已有实机生效反馈；GuardProvider 的 AI 服务入口已有使用者提供的实际命中日志，SystemHelper 后续版本仍需真机验证。
 
 ## 功能
 
@@ -213,7 +213,9 @@ python tools/check_extended_resolver.py /path/to/systemhelper.apk com.mobiletool
 脚本用模块自己的解析器扫描目标 APK，打印每个功能组的目标与返回策略；
 任一功能组被跳过时以非零码退出。需要先用 javac 把 `app/src/main/java`
 编到 `../tools/build/cls`，dexlib2 与 guava 放在 `../tools/libs`。
-APK 只被读取，不会执行。
+APK 只被读取，不会执行。输出 `MATCHED` 表示主机端识别成功，不表示已经安装 Hook；包名错误、空结果、空目标或功能组跳过都会以非零码退出。
+
+0.3.2 保留 SystemHelper 3.0.1 的单发送方法识别；对后续双发送实现，要求加密发送与备用发送都唯一匹配，并存在同一方法直接调用二者的证据。证据不足或有歧义时跳过发送组，不只拦截其中一条路径。已在使用者提供的小米 15 ROM 提取的真实 4.0.0 APK 上完成识别和静态调用链核对，10 组 / 11 个目标匹配，尚未进行该版本的设备动态验证，见 [0.3.2 验证记录](docs/preview-0.3.2-validation.md)。
 
 ## 测试
 
@@ -222,7 +224,7 @@ APK 只被读取，不会执行。
 日志开关、连续命中、失败恢复和并发读取的单元测试可运行 `gradle :app:testDebugUnitTest`。0.3.1 本地构建与验证限制见 [日志功能验证记录](docs/logging-validation.md)。
 
 ```bash
-python tools/run_resolver_tests.py /path/to/securitycenter-12.8.7.apk
+python tools/run_resolver_tests.py targetApps/securitycenter-12.8.7-houji-os3.apk
 ```
 
 需要 Python 与包含 `jdk.compiler` 的 Java 17 环境。脚本在临时目录下载并校验固定依赖，不执行或修改目标 APK。
@@ -294,7 +296,7 @@ Java 源码位于 `app/src/main/java/io/github/yunyizea/xsofprivacy/`。
 `tests/EXTENDED_RESULTS.txt`。可用下列命令同时运行两套主机识别测试：
 
 ```bash
-python tools/run_resolver_tests.py securitycenter-12.8.7.apk guardprovider-3.1.4.apk systemhelper-3.0.1.apk
+python tools/run_resolver_tests.py targetApps/securitycenter-12.8.7-houji-os3.apk targetApps/guardprovider-3.1.4-houji-os3.apk targetApps/systemhelper-3.0.1-houji-os3.apk
 ```
 
 0.3.0 新增功能尚未实机验证。原有实机反馈不能直接用于新增功能的效果结论。
