@@ -63,14 +63,23 @@ public final class ExtendedResolver {
                 g.targets.add(new Target(gate.id,null,Target.FALSE));
             });
             group(groups,"helper.encrypted_post",g->{
-                Node post=one(index.methods.values(),n->n.id.result.equals("Z")
-                        &&n.id.args.equals(Arrays.asList(STR,"[B","[B"))&&(n.flags&0x508)==0
-                        &&n.text("HttpHelper")&&n.text("sendHttpRequest() path = ")
-                        &&n.text("application/encrypted-json")&&n.text("register success!")
-                        &&n.calls("Ljava/net/URL;","openConnection")
-                        &&n.calls("Ljava/net/URLConnection;","getOutputStream")
-                        &&n.calls("Ljava/net/HttpURLConnection;","getResponseCode"),"helper telemetry post");
-                g.targets.add(new Target(post.id,null,Target.FALSE));
+                // 4.0.0 renamed the success log ("HTTPS register success!") and
+                // added a plaintext fallback sender. Anchor on structure instead of
+                // one exact log string, then take every sender on that class so the
+                // HTTPS path and its HTTP fallback cannot diverge.
+                Clazz sender=clazz(index,c->c.text("HttpHelper")
+                        &&c.text("sendHttpRequest() path = ")
+                        &&c.text("application/encrypted-json"),"helper telemetry class");
+                for(Node n:sender.nodes) {
+                    if(!"Z".equals(n.id.result)||(n.flags&0x508)!=0)continue;
+                    if(!n.id.args.contains(STR)||!n.id.args.contains("[B"))continue;
+                    if(!n.calls("Ljava/net/URL;","openConnection"))continue;
+                    if(!n.calls("Ljava/net/URLConnection;","getOutputStream"))continue;
+                    if(!n.calls("Ljava/net/HttpURLConnection;","getResponseCode"))continue;
+                    g.targets.add(new Target(n.id,null,Target.FALSE));
+                }
+                if(g.targets.size()<2)throw new IllegalArgumentException(
+                        "helper telemetry senders="+g.targets.size());
             });
             group(groups,"helper.app_usage",g->{
                 Clazz worker=clazz(index,c->"Ljava/lang/Thread;".equals(c.parent)

@@ -199,6 +199,22 @@ Xposed API 由运行时框架提供，不打入模块 APK；DEX 解析所需依�
 
 现有预览 APK 使用 AAPT2、D8 和 apksig 直接工具链构建；Gradle 构建尚未完整执行验证。`resources.arsc` 的不压缩存储、4 字节对齐及 APK 签名已检查。
 
+直接工具链构建时，Xposed API 必须保持 `compileOnly` 语义，**不能打进模块 APK**。
+若把 `de.robv.android.xposed` 的类编入 DEX，LSPosed 会拒绝加载并报
+`Cannot load module: The Xposed API classes are compiled into the module's APK.`
+。用 D8 构建时需把这些 class 从输入中排除，仅以 classpath 形式提供。
+
+若要在主机端先确认某个新版本 APK 能否被识别，不必刷入设备：
+
+```bash
+python tools/check_extended_resolver.py /path/to/systemhelper.apk com.mobiletools.systemhelper
+```
+
+脚本用模块自己的解析器扫描目标 APK，打印每个功能组的目标与返回策略；
+任一功能组被跳过时以非零码退出。需要先用 javac 把 `app/src/main/java`
+编到 `../tools/build/cls`，dexlib2 与 guava 放在 `../tools/libs`。
+APK 只被读取，不会执行。
+
 ## 测试
 
 除上述实机生效反馈外，项目包含主机端识别回归测试：
@@ -231,8 +247,10 @@ python tools/run_resolver_tests.py /path/to/securitycenter-12.8.7.apk
 | `InterceptionLog.java` | 逐次拦截日志及设置刷新 |
 | `DexIndex.java` | 读取 DEX 并建立所需的语义索引 |
 | `CompatibilityResolver.java` | 精确配置、候选匹配和功能分组 |
+| `ExtendedResolver.java` | GuardProvider 与 SystemHelper 的识别规则 |
 | `tests/ResolverTest.java` | 识别规则的主机端测试 |
 | `tools/run_resolver_tests.py` | 准备依赖并执行识别测试 |
+| `tools/check_extended_resolver.py` | 用真实 APK 检查扩展作用域识别结果 |
 | `tools/repack_apk.py` | 直接工具链的签名前组装与资源对齐检查 |
 
 Java 源码位于 `app/src/main/java/io/github/yunyizea/xsofprivacy/`。
