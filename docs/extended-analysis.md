@@ -105,6 +105,37 @@ Settings.Secure.getInt(resolver, "operator_service_improve_plan", 0) == 1
 终端注册、运营商体验计划和信号统计可能受到影响。其他组件的定位、native SDK
 自身联网、历史数据库和未知备用入口不在完整覆盖保证内。
 
+### 后续版本差异（4.0.0-20260610）
+
+`SystemHelper 4.0.0-20260610` 有两处变化影响 `helper.encrypted_post` 的命中：
+
+1. 成功日志由 `"register success!"` 改为 `"HTTPS register success!"`。原配置要求精确
+   匹配前者，导致整组因单条字符串不符而跳过（`candidates=0`）。
+2. 新增了明文 HTTP 兜底发送方法 `Lg1/f;->f(Ljava/lang/String;[B)Z`。
+
+第 2 点使「只拦截 HTTPS 发送」不再安全。`e1/g.a()` 的控制流是先调用
+`Lg1/f;->g(String,[B,[B)Z`，失败后查响应码，异常时进入兜底分支，最终调用
+`Lg1/f;->f(String,[B)Z`。若只拦截 `g` 并返回 false，`this.a` 为 null 会使响应码
+查询抛异常，控制流进入兜底分支，**反而触发明文上报**。
+
+因此识别规则改为按类结构锚定，并同时拦截该类上所有符合以下条件的发送方法：
+返回 `Z`、参数含 `String` 与 `[B`、且调用 `openConnection`、`getOutputStream`、
+`getResponseCode`。锚定类需同时含 `HttpHelper`、`sendHttpRequest() path = `、
+`application/encrypted-json` 三个稳定特征。至少匹配到 2 个目标，否则整组继续
+跳过，不做猜测。
+
+用 `tools/check_extended_resolver.py` 在 `4.0.0` 上复现：
+
+```text
+INSTALLED helper.encrypted_post hooks=2
+      Lg1/f;->f(Ljava/lang/String;[B)Z mode=FALSE
+      Lg1/f;->g(Ljava/lang/String;[B[B)Z mode=FALSE
+SUMMARY installedGroups=10 skipped=0
+```
+
+调整前为 9 组 / 9 个目标 / 1 组跳过，调整后为 10 组 / 11 个目标 / 0 组跳过。
+手机管家 14 组与 GuardProvider 1 组的识别结果未受影响。
+
 ## 证据范围
 
 测试确认特定方法的识别与 Hook 配置，没有对手机进行远程操作，也没有证明
